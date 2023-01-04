@@ -131,3 +131,4 @@ utils/*.swp
 methods/*.swp
 expt/*.swp
 classifiers/*.swp
+*.swp
