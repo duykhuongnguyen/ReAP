@@ -17,10 +17,10 @@ from utils.funcs import compute_max_distance, lp_dist, compute_validity, compute
 
 from classifiers import mlp, random_forest
 
-from libs.face import face
-from libs.frpd import quad, dpp
-from libs.dice import dice, dice_ga
-from libs.gs import gs
+from methods.face import face
+from methods.dice import dice, dice_ga
+from methods.gs import gs
+from methods.reup import reup
 
 
 # Results = namedtuple("Results", ["l1_cost", "cur_vald", "fut_vald", "feasible"])
@@ -74,7 +74,7 @@ def to_mean_std(m, s, is_best):
         return "{:.2f} $\pm$ {:.2f}".format(m, s)
 
 
-def _run_single_instance(idx, method, x0, model, shifted_models, seed, logger, params=dict()):
+def _run_single_instance(idx, method, x0, model, seed, logger, params=dict()):
     # logger.info("Generating recourse for instance : %d", idx)
 
     torch.manual_seed(seed+2)
@@ -85,9 +85,8 @@ def _run_single_instance(idx, method, x0, model, shifted_models, seed, logger, p
 
     l1_cost = lp_dist(x0, x_ar, p=1)
     cur_vald = model.predict(x_ar)
-    fut_vald = calc_future_validity(x_ar, shifted_models)
 
-    return Results(l1_cost, cur_vald, fut_vald, report['feasible'])
+    return Results(l1_cost, cur_vald, report['feasible'])
 
 
 def _run_single_instance_plans(idx, method, x0, model, seed, logger, params=dict()):
@@ -154,13 +153,10 @@ def _run_single_instance_plans_graph(idx, method, x0, graph, model, seed, logger
 
 method_name_map = {
     'face': "FACE",
-    'frpd_quad': 'FRPD-QUAD',
-    'frpd_quad_dp': 'FRPD-QUAD-DP',
-    'frpd_dpp_gr': 'FRPD-DPP-GR',
-    'frpd_dpp_ls': 'FRPD-DPP-LS',
     'dice': 'DiCE',
     'dice_ga': 'DICE_GA',
     'gs': "GS",
+    'reup': "ReUP",
 }
 
 
@@ -180,13 +176,10 @@ metric_order_graph = {'cost': -1, 'valid': 1, 'diversity': -1, 'dpp': 1, 'hammin
 
 method_map = {
     "face": face,
-    "frpd_quad": quad,
-    "frpd_quad_dp": quad,
-    "frpd_dpp_gr": dpp,
-    "frpd_dpp_ls": dpp,
     "dice": dice,
     "dice_ga": dice_ga,
     "gs": gs,
+    "reup": reup,
 }
 
 

@@ -134,11 +134,7 @@ def gd(
                 raise ValueError(f"loss_type {loss_type} not supported")
 
             A_opt = sdp_cost(x_new_enc, x, P, epsilon)
-            cost = (
-                torch.dist(x_new_enc, x, norm)
-                (x_new_enc - x).T @ A_opt @ (x_new_enc - x)
-                if feature_costs is None
-                else feature_costs * (x_new_enc - x).T @ A_opt @ (x_new_enc - x)
+            cost = (x_new_enc - x).T @ A_opt @ (x_new_enc - x)
 
             loss = loss_fn(f_x_loss, y_target) + lamb * cost
             loss.backward()

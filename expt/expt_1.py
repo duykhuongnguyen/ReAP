@@ -37,6 +37,10 @@ def run(ec, wdir, dname, cname, mname,
     full_dice_data = dice_ml.Data(dataframe=df,
                      continuous_features=numerical,
                      outcome_name='label')
+    print(dir(full_dice_data))
+    print(full_dice_data.categorical_feature_indexes, full_dice_data.categorical_feature_names, full_dice_data.get_encoded_categorical_feature_indexes)
+    print(full_dice_data.get_encoded_categorical_feature_indexes())
+    exit()
     transformer = DataTransformer(full_dice_data)
     
     y = df['label'].to_numpy()
@@ -79,29 +83,23 @@ def run(ec, wdir, dname, cname, mname,
                   config=new_config,
                   method_name=mname,
                   dataset_name=dname,
-                  k=ec.k,
                   transformer=transformer,
-                  graph_pre=ec.graph_pre)
+                  cat_indices=cat_indices,)
+                  # k=ec.k,
+                  # transformer=transformer,
+                  # graph_pre=ec.graph_pre)
 
-    params['face_params'] = ec.face_params
-    params['frpd_params'] = ec.frpd_params
-    if mname == 'frpd_quad_dp':
-        params['frpd_params']['response'] = False
-
-    if mname == 'frpd_dpp_ls':
-        params['frpd_params']['greedy'] = False
-
+    params['reup_params'] = ec.reup_params
     params['dice_params'] = ec.dice_params
+
 
     jobs_args = []
 
     for idx, x0 in enumerate(uds_X):
-        n = ec.n_neighbors
-        graph = helpers.pload(f"{dname}_{n}_{idx}.pickle", f"results/run_0/graph/{dname}")
-        # params["graph"] = graph
-        jobs_args.append((idx, method, x0, graph, model, seed, logger, params))
+        jobs_args.append((idx, method, x0, model, seed, logger, params))
 
-    rets = joblib.Parallel(n_jobs=min(num_proc, 8), prefer="threads")(joblib.delayed(_run_single_instance_plans_graph)(*jobs_args[i]) for i in range(len(jobs_args)))
+    rets = joblib.Parallel(n_jobs=min(num_proc, 8), prefer="threads")(joblib.delayed(_run_single_instance)(*jobs_args[i]) for i in range(len(jobs_args)))
+    exit()
 
     for ret in rets:
         l1_cost.append(ret.l1_cost)

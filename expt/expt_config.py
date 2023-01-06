@@ -30,6 +30,13 @@ class Expt1(Config):
         "diversity_weight": 1.0,
     }
 
+    reup_params = {
+        "T": 5,
+        "epsilon": 1e-3,
+        "lr": 0.01,
+        "lmbda": 0.1,
+    }
+
     k = 3
 
     num_samples = 1000
@@ -105,6 +112,13 @@ class Expt3(Config):
     dice_params = {
         "proximity_weight": 0.5,
         "diversity_weight": 1.0,
+    }
+
+    reup_params = {
+        "T": 5,
+        "epsilon": 1e-3,
+        "lr": 0.01,
+        "lmbda": 0.1,
     }
 
     k = 3

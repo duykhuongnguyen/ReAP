@@ -43,8 +43,7 @@ def run(ec, wdir, dname, cname, mname,
     X_df = df.drop('label', axis=1)
     X = transformer.transform(X_df).to_numpy()
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8,
-                                                        random_state=42, stratify=y)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, random_state=42, stratify=y)
     data_nodes, labels_nodes, adjacency_matrix = helpers.build_action_graph(X_train, y_train, 2, transformer, ["Age", "Personal status"])
     print(data_nodes.shape, X_train.shape)
     exit()

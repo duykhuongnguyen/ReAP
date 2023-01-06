@@ -2,7 +2,7 @@ import pandas as pd
 
 import dice_ml
 
-from libs.dice.dice_wrapper import DicePyTorchWrapper
+from methods.dice.dice_wrapper import DicePyTorchWrapper
 
 
 def generate_recourse(x0, model, random_state, params=dict()):

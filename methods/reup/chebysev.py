@@ -19,7 +19,7 @@ def chebysev_center(d, P, epsilon=1e-3, init=False):
 
     Returns:
         radius: radius of the ball
-        A: center
+        A: Chebysev center
     """
 
     # Variables initialization
@@ -50,6 +50,7 @@ def chebysev_center(d, P, epsilon=1e-3, init=False):
 
 def sdp_cost(x_t, x_0, P, epsilon=1e-3):
     # Variables initialization       
+    d = x_0.shape[0]
     A = cp.Variable((d, d), PSD=True)
 
     constraints = []
