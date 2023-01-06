@@ -10,13 +10,10 @@ from torch.autograd import Variable
 from carla import log
 from carla.recourse_methods.processing import reconstruct_encoding_constraints
 
-from methods.reup.chebysev import chebysev_center, sdp_cost
-from methods.reup.q_determine import exhaustive_search
-
 DECISION_THRESHOLD = 0.5
 
 
-def gd(
+def wachter_recourse(
     torch_model,
     x: np.ndarray,
     cat_feature_indices: List[int],
@@ -30,8 +27,6 @@ def gd(
     norm: int,
     clamp: bool,
     loss_type: str,
-    P: np.ndarray,
-    epsilon: float,
 ) -> np.ndarray:
     """
     Generates counterfactual example according to Wachter et.al for input instance x
@@ -133,12 +128,11 @@ def gd(
             else:
                 raise ValueError(f"loss_type {loss_type} not supported")
 
-            A_opt = sdp_cost(x_new_enc, x, P, epsilon)
             cost = (
                 torch.dist(x_new_enc, x, norm)
-                (x_new_enc - x).T @ A_opt @ (x_new_enc - x)
                 if feature_costs is None
-                else feature_costs * (x_new_enc - x).T @ A_opt @ (x_new_enc - x)
+                else torch.norm(feature_costs * (x_new_enc - x), norm)
+            )
 
             loss = loss_fn(f_x_loss, y_target) + lamb * cost
             loss.backward()

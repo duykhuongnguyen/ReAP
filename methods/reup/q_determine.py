@@ -1,5 +1,7 @@
 import numpy as np
 
+from methods.reup.chebysev import chebysev_center
+
 
 def compute_M(x_0, x_i, x_j):
     M = np.outer(x_i, x_i) - np.outer(x_j, x_j) + np.outer(x_j - x_i, x_0) + np.outer(x_0, x_j - x_i) 
@@ -18,6 +20,26 @@ def exhaustive_search(A_opt, x_0, data):
                 res = (i, j)
 
     return res
+
+
+def find_q(x_0, data, T, epsilon):
+    """Find the set of constraints after T questions
+
+    Parameters:
+        x_0: input instance
+        data: training data
+        T: number of questions
+        epsilon: parameter
+
+    Returns:
+    """
+    d = x_0.shape[0]
+    P = []
+
+    for i in range(T):
+        init = True if i == 0 else False
+        radius, A_opt = chebysev_center(d, P, epsilon, init)
+
 
 
 if __name__ == '__main__':
