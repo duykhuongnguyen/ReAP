@@ -18,7 +18,7 @@ from utils.funcs import compute_max_distance, lp_dist, compute_validity, compute
 from classifiers import mlp, random_forest
 
 from methods.face import face
-from methods.dice import dice, dice_ga
+from methods.dice import dice
 from methods.gs import gs
 from methods.reup import reup
 
