@@ -34,12 +34,7 @@ from expt.expt_config import Expt2
 Results = namedtuple("Results", ["l1_cost", "cur_vald", "fut_vald", "feasible"])
 
 param_to_vary = {
-    "dice": "diversity_weight",
-    "dice_ga": "diversity_weight",
-    "frpd_quad": "theta",
-    "frpd_quad_dp": "theta",
-    "frpd_dpp_gr": "theta",
-    "frpd_dpp_ls": "theta",
+    "reup": "T",
 }
 
 
@@ -48,7 +43,8 @@ def run(ec, wdir, dname, cname, mname,
                 # dname, cname, mname)
     print("Running dataset: %s, classifier: %s, method: %s..." %
                 (dname, cname, mname))
-    df, numerical = helpers.get_dataset(dname, params=synthetic_params) if dname == "german" else helpers.get_full_dataset(dname, params=synthetic_params)
+    full_l = ["synthesis", "german"]
+    df, numerical = helpers.get_dataset(dname, params=synthetic_params) if dname in full_l else helpers.get_full_dataset(dname, params=synthetic_params)
     full_dice_data = dice_ml.Data(dataframe=df,
                      continuous_features=numerical,
                      outcome_name='label')
@@ -57,13 +53,16 @@ def run(ec, wdir, dname, cname, mname,
     y = df['label'].to_numpy()
     X_df = df.drop('label', axis=1)
     X = transformer.transform(X_df).to_numpy()
+    cat_indices = [len(numerical) + i for i in range(X.shape[1] - len(numerical))]
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8,
-                                                        random_state=42, stratify=y)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, random_state=42, stratify=y)
 
     d = X.shape[1]
     clf = clf_map[cname]
     model = load_models(dname, cname, wdir)
+    y_labels = model.predict(X_train)
+    y_pred = model.predict(X_test)               
+    uds_X, uds_y = X_test[y_pred == 0], y_test[y_pred == 0]                                           
 
     ptv = param_to_vary[mname]
     method = method_map[mname]
@@ -77,16 +76,14 @@ def run(ec, wdir, dname, cname, mname,
     res['ptv_name'] = ptv
     res['ptv_list'] = ptv_list
     res['cost'] = []
-    res['diversity'] = []
-    res['dpp'] = []
-    res['manifold_dist'] = []
     res['feasible'] = []
+
+    A = np.random.rand(X_train.shape[1], X_train.shape[1])                                                
+    A = np.dot(A, A.T)                               
 
     for value in ptv_list:
         print("varying %s = %f" % (ptv, value))
         new_config = Expt2(ec.to_dict())
-        y_pred = model.predict(X_test)
-        uds_X, uds_y = X_test[y_pred == 0], y_test[y_pred == 0]
 
         if start_index is not None or num_ins is not None:
             num_ins = num_ins or 1
@@ -97,51 +94,36 @@ def run(ec, wdir, dname, cname, mname,
             uds_X, uds_y = uds_X[:ec.max_ins], uds_y[:ec.max_ins]
 
         params = dict(train_data=X_train,
-                      labels=model.predict(X_train),
+                      labels=y_labels,
                       dataframe=df,
                       numerical=numerical,
                       config=new_config,
                       method_name=mname,
                       dataset_name=dname,
                       k=ec.k,
-                      transformer=transformer,)
-
-        params['frpd_params'] = ec.frpd_params
-        if mname == 'frpd_quad_dp':
-            params['frpd_params']['response'] = False
-
-        if mname == 'frpd_dpp_ls':
-            params['frpd_params']['greedy'] = False
+                      transformer=transformer,
+                      cat_indices=cat_indices,
+                      A=A,)
 
         params['dice_params'] = ec.dice_params
+        params['reup_params'] = ec.reup_params
 
-        if ptv == 'theta':
-            params['frpd_params']['theta'] = value
-        elif ptv == 'diversity_weight':
-            params['dice_params']['diversity_weight'] = value
+        if ptv == 'T':
+            params['reup_params']['T'] = value
         
         rets = []
         for idx, x0 in enumerate(uds_X):
-            ret = _run_single_instance_plans(idx, method, x0, model, seed, logger, params)
+            ret = _run_single_instance(idx, method, x0, model, seed, logger, params)
             rets.append(ret)
 
         cost = []
-        diversity = []
-        dpp = []
-        manifold_dist = []
         feasible = []
 
         for ret in rets:
             cost.append(ret.l1_cost)
-            diversity.append(ret.diversity)
-            dpp.append(ret.dpp)
-            manifold_dist.append(ret.manifold_dist)
             feasible.append(ret.feasible)
 
         res['cost'].append(np.array(cost))
-        res['diversity'].append(np.array(diversity))
-        res['dpp'].append(np.array(dpp))
-        res['manifold_dist'].append(np.array(manifold_dist))
         res['feasible'].append(np.array(feasible))
 
     helpers.pdump(res,
@@ -152,10 +134,8 @@ def run(ec, wdir, dname, cname, mname,
 
 
 label_map = {
-    'diversity': "Anti-Diversity",
-    'dpp': "DPP",
-    'manifold_dist': "Manifold distance",
     'cost': 'Cost',
+    'ptv_list': 'T',
 }
 
 def plot_2(ec, wdir, cname, dname, methods):
@@ -166,13 +146,14 @@ def plot_2(ec, wdir, cname, dname, methods):
         iter_marker = itertools.cycle(marker)
 
         for mname in methods:
-            X, y = find_pareto(data[mname][x_label], data[mname][y_label])
+            # X, y = find_pareto(data[mname][x_label], data[mname][y_label])
+            X, y = data[mname][x_label], data[mname][y_label]
             ax.plot(X, y, marker=next(iter_marker),
                     label=method_name_map[mname], alpha=0.8)
 
         ax.set_ylabel(label_map[y_label])
         ax.set_xlabel(label_map[x_label])
-        # ax.set_yscale('log')
+        ax.set_yscale('log')
         ax.legend(prop={'size': 14})
         filepath = os.path.join(wdir, f"{cname}_{dname}_{x_label}_{y_label}.png")
         plt.savefig(filepath, dpi=400, bbox_inches='tight')
@@ -195,19 +176,11 @@ def plot_2(ec, wdir, cname, dname, methods):
         data[mname]['ptv_name'] = res['ptv_name']
         data[mname]['ptv_list'] = res['ptv_list']
         data[mname]['cost'] = []
-        data[mname]['diversity'] = []
-        data[mname]['manifold_dist'] = []
-        data[mname]['dpp'] = []
 
         for i in range(len(res['ptv_list'])):
             data[mname]['cost'].append(np.mean(res['cost'][i]))
-            data[mname]['diversity'].append(np.mean(res['diversity'][i]))
-            data[mname]['manifold_dist'].append(np.mean(res['manifold_dist'][i]))
-            data[mname]['dpp'].append(np.mean(res['dpp'][i]))
 
-    plot(methods, 'cost', 'diversity', data)
-    plot(methods, 'cost', 'dpp', data)
-    plot(methods, 'cost', 'manifold_dist', data)
+    plot(methods, 'ptv_list', 'cost', data)
 
 
 def plot_2_1(ec, wdir, cname, datasets, methods):
@@ -331,6 +304,6 @@ def run_expt_2(ec, wdir, datasets, classifiers, methods,
             cmethods.remove('wachter')            
         for dname in datasets:
             plot_2(ec.e2, wdir, cname, dname, cmethods)
-        plot_2_1(ec.e2, wdir, cname, datasets, cmethods)
+        # plot_2_1(ec.e2, wdir, cname, datasets, cmethods)
 
     logger.info("Done ept 2.")

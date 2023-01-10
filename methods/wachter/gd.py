@@ -29,8 +29,6 @@ def gd(
     norm: int,
     clamp: bool,
     loss_type: str,
-    P: np.ndarray,
-    epsilon: float,
 ) -> np.ndarray:
     """
     Generates counterfactual example according to Wachter et.al for input instance x
@@ -102,37 +100,34 @@ def gd(
         raise ValueError(f"loss_type {loss_type} not supported")
 
     # get the probablity of the target class
-    y_target = torch.tensor([target_class]).float().to(device)
-    f_x_new = torch_model(x_new)
+    y_target = torch.tensor(target_class).float().to(device)
+    f_x = torch_model(x_new)
 
     t0 = datetime.datetime.now()
     t_max = datetime.timedelta(minutes=t_max_min)
-    while f_x_new <= DECISION_THRESHOLD:
+    while f_x <= DECISION_THRESHOLD:
         it = 0
-        while f_x_new <= 0.5 and it < n_iter:
+        while f_x <= 0.5 and it < n_iter:
             optimizer.zero_grad()
             x_new_enc = reconstruct_encoding_constraints(
                 x_new, cat_feature_indices, binary_cat_features
             )
             # use x_new_enc for prediction results to ensure constraints
             # get the probablity of the target class
-            f_x_new = torch_model(x_new_enc)
 
             if loss_type == "MSE":
                 # single logit score for the target class for MSE loss
-                f_x_loss = torch.log(f_x_new / (1 - f_x_new))
+                f_x = torch.log(f_x_new / (1 - f_x_new))
             elif loss_type == "BCE":
                 # tuple output for BCE loss
-                f_x_loss = torch_model(x_new_enc).squeeze(axis=0)
+                f_x = torch_model(x_new_enc).squeeze()
             else:
                 raise ValueError(f"loss_type {loss_type} not supported")
 
-            _x_new_enc = x_new_enc.clone()
-            _x = x.clone()
-            A_opt = sdp_cost(_x_new_enc.detach().cpu().numpy().squeeze(), _x.detach().cpu().numpy().squeeze(), P, epsilon)
-            A_opt = torch.tensor(A_opt, dtype=torch.float32).to(device)
-            cost = torch.matmul(torch.matmul(x_new_enc - x, A_opt), (x_new_enc - x).T)
-            loss = loss_fn(f_x_loss, y_target) + lamb * cost
+            # cost = torch.matmul(x_new_enc - x, (x_new_enc - x).T)
+            cost = torch.dist(x_new_enc, x, 1)
+            f_loss = loss_fn(f_x, y_target)
+            loss = f_loss + lamb * cost
             loss.backward()
             optimizer.step()
             # clamp potential CF
@@ -144,7 +139,7 @@ def gd(
         if datetime.datetime.now() - t0 > t_max:
             log.info("Timeout - No Counterfactual Explanation Found")
             break
-        elif f_x_new >= 0.5:
+        elif f_x >= 0.5:
             log.info("Counterfactual Explanation Found")
     feasible = True if torch_model.predict(x_new_enc) == 1 else False 
     return x_new_enc.cpu().detach().numpy().squeeze(axis=0), feasible

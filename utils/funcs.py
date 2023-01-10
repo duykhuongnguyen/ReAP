@@ -43,6 +43,10 @@ def l1_dist(x, y, p=2):
     return np.linalg.norm(x - y, ord=1)
 
 
+def mahalanobis_dist(x, y, A):
+    return np.sqrt((x - y).T @ A @ (x - y))
+
+
 def uniform_ball(x, r, n, random_state=None):
     # muller method
     random_state = check_random_state(random_state)

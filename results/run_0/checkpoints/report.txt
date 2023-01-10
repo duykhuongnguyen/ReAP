@@ -1,5 +1,5 @@
 mlp:
-  synthesis:
+  german:
     accuracy: !!python/object/apply:numpy.core.multiarray.scalar
     - &id001 !!python/object/apply:numpy.dtype
       args:
@@ -16,8 +16,8 @@ mlp:
       - -1
       - 0
     - !!binary |
-      MzMzMzMz7z8=
+      uB6F61G45j8=
     auc: !!python/object/apply:numpy.core.multiarray.scalar
     - *id001
     - !!binary |
-      P378+PHj7z8=
+      1EEd1EEd5D8=

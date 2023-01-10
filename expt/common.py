@@ -13,18 +13,20 @@ import dice_ml
 
 from utils import helpers
 from utils.data_transformer import DataTransformer
-from utils.funcs import compute_max_distance, lp_dist, compute_validity, compute_proximity, compute_diversity, compute_distance_manifold, compute_dpp, compute_likelihood, compute_pairwise_cosine, compute_kde, compute_proximity_graph, compute_proximity_graph_, compute_diversity_path, hamming_distance, levenshtein_distance, jaccard
+from utils.funcs import compute_max_distance, lp_dist, compute_validity, compute_proximity, compute_diversity, compute_distance_manifold, compute_dpp, compute_likelihood, compute_pairwise_cosine, compute_kde, compute_proximity_graph, compute_proximity_graph_, compute_diversity_path, hamming_distance, levenshtein_distance, jaccard, mahalanobis_dist
 
 from classifiers import mlp, random_forest
 
 from methods.face import face
-from methods.dice import dice, dice_ga
+from methods.dice import dice
 from methods.gs import gs
 from methods.reup import reup
+from methods.wachter import wachter, wachter_reb
 
 
 # Results = namedtuple("Results", ["l1_cost", "cur_vald", "fut_vald", "feasible"])
-Results = namedtuple("Results", ["valid", "l1_cost", "diversity", "dpp", "manifold_dist", "likelihood", "feasible"])
+# Results = namedtuple("Results", ["valid", "l1_cost", "diversity", "dpp", "manifold_dist", "likelihood", "feasible"])
+Results = namedtuple("Results", ["l1_cost", "valid", "feasible"])
 Results_graph = namedtuple("Results_graph", ["valid", "l1_cost", "diversity", "dpp", "manifold_dist", "hamming",  "lev", "jac", "feasible"])
 
 
@@ -75,18 +77,17 @@ def to_mean_std(m, s, is_best):
 
 
 def _run_single_instance(idx, method, x0, model, seed, logger, params=dict()):
-    # logger.info("Generating recourse for instance : %d", idx)
-
     torch.manual_seed(seed+2)
     np.random.seed(seed+1)
     random_state = check_random_state(seed)
 
-    x_ar, report = method.generate_recourse(x0, model, random_state, params)
+    x_ar, feasible = method.generate_recourse(x0, model, random_state, params)
 
-    l1_cost = lp_dist(x0, x_ar, p=1)
-    cur_vald = model.predict(x_ar)
+    # l1_cost = lp_dist(x0, x_ar, p=1)
+    l1_cost = mahalanobis_dist(x_ar, x0, params['A'])
+    valid = 1.0 if feasible else 0.0
 
-    return Results(l1_cost, cur_vald, report['feasible'])
+    return Results(l1_cost, valid, feasible)
 
 
 def _run_single_instance_plans(idx, method, x0, model, seed, logger, params=dict()):
@@ -157,6 +158,7 @@ method_name_map = {
     'dice_ga': 'DICE_GA',
     'gs': "GS",
     'reup': "ReUP",
+    'wachter': "Wachter",
 }
 
 
@@ -170,16 +172,18 @@ dataset_name_map = {
     "compas": "Compas",
 }
 
-metric_order = {'cost': -1, 'valid': 1, 'diversity': -1, 'dpp': 1, 'manifold_dist': -1, 'likelihood': 1}
+# metric_order = {'cost': -1, 'valid': 1, 'diversity': -1, 'dpp': 1, 'manifold_dist': -1, 'likelihood': 1}
+metric_order = {'cost': -1, 'valid': 1}
 
 metric_order_graph = {'cost': -1, 'valid': 1, 'diversity': -1, 'dpp': 1, 'hamming': 1, 'lev': 1, 'jac': -1}
 
 method_map = {
     "face": face,
     "dice": dice,
-    "dice_ga": dice_ga,
+    # "dice_ga": dice_ga,
     "gs": gs,
     "reup": reup,
+    "wachter": wachter,
 }
 
 

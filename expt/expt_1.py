@@ -37,15 +37,12 @@ def run(ec, wdir, dname, cname, mname,
     full_dice_data = dice_ml.Data(dataframe=df,
                      continuous_features=numerical,
                      outcome_name='label')
-    print(dir(full_dice_data))
-    print(full_dice_data.categorical_feature_indexes, full_dice_data.categorical_feature_names, full_dice_data.get_encoded_categorical_feature_indexes)
-    print(full_dice_data.get_encoded_categorical_feature_indexes())
-    exit()
     transformer = DataTransformer(full_dice_data)
     
     y = df['label'].to_numpy()
     X_df = df.drop('label', axis=1)
     X = transformer.transform(X_df).to_numpy()
+    cat_indices = [len(numerical) + i for i in range(X.shape[1] - len(numerical))]
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8,
                                                         random_state=42, stratify=y)
@@ -65,17 +62,13 @@ def run(ec, wdir, dname, cname, mname,
 
     l1_cost = []
     valid = []
-    diversity = []
-    dpp = []
-    manifold_dist = []
-    hamming = []
-    lev = []
-    jac = []
     feasible = []
 
     y_pred = model.predict(X_test)
     uds_X, uds_y = X_test[y_pred == 0], y_test[y_pred == 0]
     uds_X, uds_y = uds_X[:ec.max_ins], uds_y[:ec.max_ins]
+    A = np.random.rand(X_train.shape[1], X_train.shape[1])
+    A = np.dot(A, A.T)
     params = dict(train_data=X_train,
                   labels=y_train,
                   dataframe=df,
@@ -84,14 +77,14 @@ def run(ec, wdir, dname, cname, mname,
                   method_name=mname,
                   dataset_name=dname,
                   transformer=transformer,
-                  cat_indices=cat_indices,)
-                  # k=ec.k,
+                  cat_indices=cat_indices,
+                  A=A,)
                   # transformer=transformer,
                   # graph_pre=ec.graph_pre)
 
     params['reup_params'] = ec.reup_params
+    params['wachter_params'] = ec.wachter_params
     params['dice_params'] = ec.dice_params
-
 
     jobs_args = []
 
@@ -99,17 +92,10 @@ def run(ec, wdir, dname, cname, mname,
         jobs_args.append((idx, method, x0, model, seed, logger, params))
 
     rets = joblib.Parallel(n_jobs=min(num_proc, 8), prefer="threads")(joblib.delayed(_run_single_instance)(*jobs_args[i]) for i in range(len(jobs_args)))
-    exit()
 
     for ret in rets:
         l1_cost.append(ret.l1_cost)
         valid.append(ret.valid)
-        diversity.append(ret.diversity)
-        dpp.append(ret.dpp)
-        manifold_dist.append(ret.manifold_dist)
-        hamming.append(ret.hamming)
-        lev.append(ret.lev)
-        jac.append(ret.jac)
         feasible.append(ret.feasible)
 
     def to_numpy_array(lst):
@@ -118,15 +104,9 @@ def run(ec, wdir, dname, cname, mname,
 
     l1_cost = np.array(l1_cost)
     valid = np.array(valid)
-    diversity = np.array(diversity)
-    dpp = np.array(dpp)
-    manifold_dist = np.array(manifold_dist)
-    hamming = np.array(hamming)
-    lev = np.array(lev)
-    jac = np.array(jac)
     feasible = np.array(feasible)
 
-    helpers.pdump((l1_cost, valid, diversity, dpp, manifold_dist, hamming, lev, jac, feasible),
+    helpers.pdump((l1_cost, valid, feasible),
                   f'{cname}_{dname}_{mname}.pickle', wdir)
 
     logger.info("Done dataset: %s, classifier: %s, method: %s!",
@@ -144,7 +124,7 @@ def plot_1(ec, wdir, cname, datasets, methods):
 
         joint_feasible = None
         for mname in methods:
-            _, _, _, _, _, _, _, _, feasible = helpers.pload(
+            _, _, feasible = helpers.pload(
                 f'{cname}_{dname}_{mname}.pickle', wdir)
             if joint_feasible is None:
                 joint_feasible = np.ones_like(feasible)
@@ -153,23 +133,17 @@ def plot_1(ec, wdir, cname, datasets, methods):
 
         temp = defaultdict(dict)
 
-        for metric, order in metric_order_graph.items():
+        for metric, order in metric_order.items():
             temp[metric]['best'] = -np.inf
 
         for mname in methods:
-            l1_cost, valid, diversity, dpp, manifold_dist, hamming, lev, jac, feasible = helpers.pload(
+            l1_cost, valid, feasible = helpers.pload(
                 f'{cname}_{dname}_{mname}.pickle', wdir)
             avg = {}
             avg['cost'] = l1_cost 
             avg['valid'] = valid 
-            avg['diversity'] = diversity 
-            avg['dpp'] = dpp 
-            avg['manifold_dist'] = manifold_dist
-            avg['hamming'] = hamming
-            avg['lev'] = lev
-            avg['jac'] = jac
 
-            for metric, order in metric_order_graph.items():
+            for metric, order in metric_order.items():
                 m, s = np.mean(avg[metric]), np.std(avg[metric])
                 temp[metric][mname] = (m, s)
                 temp[metric]['best'] = max(temp[metric]['best'], m * order)
@@ -178,7 +152,7 @@ def plot_1(ec, wdir, cname, datasets, methods):
 
         for mname in methods:
             res['method'].append(method_name_map[mname])
-            for metric, order in metric_order_graph.items():
+            for metric, order in metric_order.items():
                 m, s = temp[metric][mname]
                 is_best = (temp[metric]['best'] == m * order)
                 res[metric].append(to_mean_std(m, s, is_best))

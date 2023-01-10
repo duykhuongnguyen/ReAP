@@ -32,12 +32,17 @@ class Expt1(Config):
 
     reup_params = {
         "T": 5,
-        "epsilon": 1e-3,
+        "eps": 1e-3,
         "lr": 0.01,
-        "lmbda": 0.1,
+        "lmbda": 1.0,
     }
 
-    k = 3
+    wachter_params = {
+        "lr": 0.01,
+        "lmbda": 1.0,
+    }
+
+    k = 1
 
     num_samples = 1000
     max_ins = 10
@@ -68,6 +73,13 @@ class Expt2(Config):
         "diversity_weight": 1.0,
     }
 
+    reup_params = {  
+        "T": 5,      
+        "eps": 1e-3, 
+        "lr": 0.01,  
+        "lmbda": 1.0,
+    }                
+
     params_to_vary = {
         'theta': {
             'default': 0.5,
@@ -81,10 +93,17 @@ class Expt2(Config):
             'max': 10.0,
             'step': 0.5,
         },
+        'T': {
+            'default': 1,
+            'min': 0,    
+            'max': 5,   
+            'step': 1,   
+        },
     }
 
     k = 3
     num_samples = 1000
+    max_ins = 10
 
 
 class Expt3(Config):

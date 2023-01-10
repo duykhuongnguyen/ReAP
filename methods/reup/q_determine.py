@@ -1,6 +1,6 @@
 import numpy as np
 
-from methods.reup.chebysev import chebysev_center, sdp_cost
+from chebysev import chebysev_center, sdp_cost
 
 
 def compute_M(x_0, x_i, x_j):
@@ -18,7 +18,30 @@ def exhaustive_search(A_opt, x_0, data):
             if obj < cur:
                 cur = obj
                 res = M_ij
+    
+    return res
 
+
+def similar_cost_heuristics(A_opt, x_0, data):
+    l = data.shape[0]
+    s = np.zeros(l)
+    d = {}
+    for i in range(l):
+        s[i] = (data[i] - x_0).T @ A_opt @ (data[i] - x_0)
+        d[i] = s[i]
+    
+    np.sort(s)
+    d_sorted = dict(sorted(d.items(), key=lambda item: -item[1]))
+    d_list = list(d_sorted.keys())
+
+    cur = np.inf
+    for i in range(l - 1):
+        M_ij = compute_M(x_0, data[d_list[i]], data[d_list[i + 1]])
+        obj = np.abs(np.sum(np.multiply(A_opt, M_ij))) / (np.sum(np.multiply(M_ij, M_ij))) 
+        if obj < cur: 
+            cur = obj                    
+            res = M_ij
+    
     return res
 
 
@@ -39,7 +62,8 @@ def find_q(x_0, data, T, epsilon):
     for i in range(T):
         init = True if i == 0 else False
         radius, A_opt = chebysev_center(d, P, epsilon, init)
-        M_ij = exhaustive_search(A_opt, x_0, data)
+        # M_ij = exhaustive_search(A_opt, x_0, data)
+        M_ij = similar_cost_heuristics(A_opt, x_0, data)
         P.append(M_ij)
 
     return P

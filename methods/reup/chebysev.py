@@ -45,6 +45,7 @@ def chebysev_center(d, P, epsilon=1e-3, init=False):
 
     # Results
     if p.status not in ["infeasible", "unbounded"]:
+        print(radius.value)
         return radius.value, A.value
 
 

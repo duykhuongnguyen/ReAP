@@ -34,11 +34,11 @@ class Net0(nn.Module):
             inp = inp.float()
         out = self.forward(inp).detach()
         out = torch.cat([1 - out, out], axis=-1)
-        return out.numpy()
+        return out
 
     def predict(self, inp):
         out = self.predict_proba(inp)
-        y_pred = np.argmax(out, axis=-1)
+        y_pred = torch.argmax(out, axis=-1)
         return y_pred
 
 
