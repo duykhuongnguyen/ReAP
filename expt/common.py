@@ -1,4 +1,5 @@
 import numpy as np
+import scipy
 import copy
 import os
 import torch
@@ -21,11 +22,9 @@ from methods.face import face
 from methods.dice import dice
 from methods.gs import gs
 from methods.reup import reup
-from methods.wachter import wachter, wachter_reb
+from methods.wachter import wachter, wachter_gt
 
 
-# Results = namedtuple("Results", ["l1_cost", "cur_vald", "fut_vald", "feasible"])
-# Results = namedtuple("Results", ["valid", "l1_cost", "diversity", "dpp", "manifold_dist", "likelihood", "feasible"])
 Results = namedtuple("Results", ["l1_cost", "valid", "feasible"])
 Results_graph = namedtuple("Results_graph", ["valid", "l1_cost", "diversity", "dpp", "manifold_dist", "hamming",  "lev", "jac", "feasible"])
 
@@ -81,10 +80,13 @@ def _run_single_instance(idx, method, x0, model, seed, logger, params=dict()):
     np.random.seed(seed+1)
     random_state = check_random_state(seed)
 
-    x_ar, feasible = method.generate_recourse(x0, model, random_state, params)
+    l1_cost = np.zeros(params['num_A'])
+    for i in range(params['num_A']):
+        params['A'] = params['all_A'][i]
 
-    # l1_cost = lp_dist(x0, x_ar, p=1)
-    l1_cost = mahalanobis_dist(x_ar, x0, params['A'])
+        x_ar, feasible = method.generate_recourse(x0, model, random_state, params)
+        l1_cost[i] = mahalanobis_dist(x_ar, x0, params['A'])
+    l1_cost = np.sum(l1_cost)
     valid = 1.0 if feasible else 0.0
 
     return Results(l1_cost, valid, feasible)
@@ -159,6 +161,7 @@ method_name_map = {
     'gs': "GS",
     'reup': "ReUP",
     'wachter': "Wachter",
+    'gt': "GT",
 }
 
 
@@ -184,6 +187,7 @@ method_map = {
     "gs": gs,
     "reup": reup,
     "wachter": wachter,
+    "gt": wachter_gt,
 }
 
 

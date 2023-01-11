@@ -19,7 +19,7 @@ def generate_recourse(x0, model, random_state, params=dict()):
     lmbda = params['reup_params']['lmbda']
     
     # Questions generation
-    P = find_q(x0, data, T, epsilon)
+    P = find_q(x0, data, T, params['A'], epsilon)
 
     # Recourse generation
     recourse, feasible = gd(model, x0, cat_indices, binary_cat_features=True, lr=lr, lambda_param=lmbda, y_target=[0, 1], n_iter=1000, t_max_min=1000, norm=1, clamp=True, loss_type="BCE", P=P, epsilon=epsilon)

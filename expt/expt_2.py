@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import scipy
 import pandas as pd
 import copy
 import joblib
@@ -78,8 +79,12 @@ def run(ec, wdir, dname, cname, mname,
     res['cost'] = []
     res['feasible'] = []
 
-    A = np.random.rand(X_train.shape[1], X_train.shape[1])                                                
-    A = np.dot(A, A.T)                               
+    all_A = np.zeros((ec.num_A, X_train.shape[1], X_train.shape[1]))
+    for i in range(ec.num_A):
+        S = np.diag(np.random.rand(X_train.shape[1]))
+        q, _ = scipy.linalg.qr(np.random.rand(X_train.shape[1], X_train.shape[1]))
+        A = q.T @ S @ q
+        all_A[i] = A
 
     for value in ptv_list:
         print("varying %s = %f" % (ptv, value))
@@ -103,13 +108,18 @@ def run(ec, wdir, dname, cname, mname,
                       k=ec.k,
                       transformer=transformer,
                       cat_indices=cat_indices,
-                      A=A,)
+                      all_A=all_A,
+                      num_A=ec.num_A,)
 
         params['dice_params'] = ec.dice_params
         params['reup_params'] = ec.reup_params
+        params['wachter_params'] = ec.wachter_params
 
         if ptv == 'T':
             params['reup_params']['T'] = value
+        elif ptv == 'lmbda':
+            params['reup_params']['lmbda'] = value
+            params['wachter_params']['lmbda'] = value
         
         rets = []
         for idx, x0 in enumerate(uds_X):

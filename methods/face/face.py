@@ -256,7 +256,7 @@ def graph_search(data, index, keys_immutables, model, n_neighbors=50, p_norm=2, 
             axis=1
         )
     elif p_norm == 2:
-        c_dist = np.square((data[index] - candidate_counterfactuals)).sum(axis=1)
+        c_dist = np.square((data[index] - candidate_counterfactual_star)).sum(axis=1)       
     else:
         raise ValueError("Distance not defined yet. Choose p_norm to be 1 or 2")
 
@@ -272,57 +272,14 @@ def generate_recourse(x0, model, random_state, params=dict()):
     mode = params['face_params']['mode']
     fraction = params['face_params']['fraction']
     train_data = params['train_data']
-    graph_preprocess = params['graph_pre']
-    graph_elem = params['graph']
 
     # Remove test instance from training instance and concat
     idx = np.all(x0 == train_data, axis=1)
     train_data = train_data[idx == False]
     train_data = np.concatenate([x0.reshape(1, -1), train_data])
 
-    # Graph preprocess 
-    if graph_preprocess:
-        candidate_counterfactuals_star = []
-        data_ = graph_elem["data"]
-        labels_ = graph_elem["labels"]
-        y_positive_indeces = np.where(labels_ == 1)
-
-        adj_matrix = graph_elem['adj']
-        weighted_adj_matrix = graph_elem['weighted_adj']
-        G = nx.from_numpy_matrix(weighted_adj_matrix)
-
-        distances, min_distance = shortest_path(adj_matrix, 0)
-        distances_w, min_distance_w = shortest_path(weighted_adj_matrix, 0)
-
-        candidate_min_distances = [min_distance + i for i in range(20)]
-        min_distance_indeces = np.array([0])
-        for min_dist in candidate_min_distances:
-            min_distance_indeces = np.c_[
-                min_distance_indeces, np.array(np.where(distances == min_dist))
-            ]
-        min_distance_indeces = np.delete(min_distance_indeces, 0)
-        indeces_counterfactuals = np.intersect1d(
-            np.array(y_positive_indeces), np.array(min_distance_indeces)
-        )
-        for i in range(indeces_counterfactuals.shape[0]):
-            candidate_counterfactuals_star.append(indeces_counterfactuals[i])
-        
-        data_star = data_[candidate_counterfactuals_star]
-        distances_w_star = distances_w[candidate_counterfactuals_star]
-
-        min_index = np.argsort(distances_w_star)[:params['k']]
-        min_dist = distances_w_star[min_index]
-        paths = []
-        for i in range(len(min_index)):
-            idx = np.all(data_star[min_index[i]] == data_, axis=1)
-            idx = np.where(idx == True)[0][0]
-            paths.append(nx.shortest_path(G, source=0, target=idx))
-        candidate_counterfactual_star = data_star[min_index]
-
-        return candidate_counterfactual_star, min_dist, paths, dict(feasible=True) 
-
     # Graph search
-    cf = graph_search(train_data, 0, None, model, p_norm=1, mode=mode, frac=fraction, K=params['k'])
-    report = dict(feasible=True)
+    cf = graph_search(train_data, 0, None, model, p_norm=2, mode=mode, frac=fraction, K=1)
+    report = True
 
-    return cf, report
+    return cf.squeeze(), report

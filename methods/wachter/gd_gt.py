@@ -29,6 +29,7 @@ def gd(
     norm: int,
     clamp: bool,
     loss_type: str,
+    A_0: np.ndarray,
 ) -> np.ndarray:
     """
     Generates counterfactual example according to Wachter et.al for input instance x
@@ -75,6 +76,7 @@ def gd(
     # such that categorical data is either 0 or 1
     x_new_enc = reconstruct_encoding_constraints(
         x_new, cat_feature_indices, binary_cat_features)
+    A_0 = torch.tensor(A_0, dtype=torch.float32).to(device)
 
     optimizer = optim.Adam([x_new], lr, amsgrad=True)
 
@@ -124,7 +126,7 @@ def gd(
             else:
                 raise ValueError(f"loss_type {loss_type} not supported")
 
-            cost = torch.matmul(x_new_enc - x, (x_new_enc - x).T)
+            cost = torch.matmul(torch.matmul(x_new_enc - x, A_0), (x_new_enc - x).T)
             f_loss = loss_fn(f_x, y_target)
             loss = f_loss + lamb * cost
             loss.backward()

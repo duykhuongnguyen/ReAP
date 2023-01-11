@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import scipy
 import pandas as pd
 import joblib
 import torch
@@ -46,15 +47,8 @@ def run(ec, wdir, dname, cname, mname,
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8,
                                                         random_state=42, stratify=y)
-    # data_nodes, labels_nodes, adjacency_matrix = helpers.build_action_graph(X_train, y_train, 2, transformer, ["Age", "Personal status"])
     new_config = Expt1(ec.to_dict())
     
-    # graph = helpers.pload(f"{dname}_{ec.n_neighbors}.pickle", "results/run_0/graph")
-    # nodes = graph["data"]
-    # node_labels = graph["labels"]
-    # adj_matrix = graph["adj"]
-    # weighted_adj_matrix = graph["weighted_adj"]
-
     d = X.shape[1]
     clf = clf_map[cname]
     model = load_models(dname, cname, wdir)
@@ -67,8 +61,17 @@ def run(ec, wdir, dname, cname, mname,
     y_pred = model.predict(X_test)
     uds_X, uds_y = X_test[y_pred == 0], y_test[y_pred == 0]
     uds_X, uds_y = uds_X[:ec.max_ins], uds_y[:ec.max_ins]
-    A = np.random.rand(X_train.shape[1], X_train.shape[1])
-    A = np.dot(A, A.T)
+    # A = np.random.rand(X_train.shape[1], X_train.shape[1])
+    # A = np.dot(A, A.T)
+    # w, v = np.linalg.eig(A)
+    # A /= (max(w))
+    all_A = np.zeros((ec.num_A, X_train.shape[1], X_train.shape[1]))
+    for i in range(ec.num_A):
+        S = np.diag(np.random.rand(X_train.shape[1]))
+        q, _ = scipy.linalg.qr(np.random.rand(X_train.shape[1], X_train.shape[1]))
+        A = q.T @ S @ q
+        all_A[i] = A
+
     params = dict(train_data=X_train,
                   labels=y_train,
                   dataframe=df,
@@ -78,13 +81,16 @@ def run(ec, wdir, dname, cname, mname,
                   dataset_name=dname,
                   transformer=transformer,
                   cat_indices=cat_indices,
-                  A=A,)
+                  A=A,
+                  num_A=ec.num_A,
+                  all_A=all_A,)
                   # transformer=transformer,
                   # graph_pre=ec.graph_pre)
 
     params['reup_params'] = ec.reup_params
     params['wachter_params'] = ec.wachter_params
     params['dice_params'] = ec.dice_params
+    params['face_params'] = ec.face_params
 
     jobs_args = []
 

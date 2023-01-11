@@ -31,7 +31,7 @@ def chebysev_center(d, P, epsilon=1e-3, init=False):
     # Linear constraint
     if l_P > 0:
         for i, M in enumerate(P):
-            constraints += [cp.sum((cp.multiply(M, A))) + radius * cp.sum((cp.multiply(M, M))) <= epsilon]
+            constraints += [cp.sum((cp.multiply(M, A))) + radius * cp.norm(M, 'fro') <= epsilon] # cp.sum((cp.multiply(M, M))) <= epsilon]
 
     # Bounded constraint
     constraints += [A << np.eye(d)]
@@ -45,7 +45,6 @@ def chebysev_center(d, P, epsilon=1e-3, init=False):
 
     # Results
     if p.status not in ["infeasible", "unbounded"]:
-        print(radius.value)
         return radius.value, A.value
 
 

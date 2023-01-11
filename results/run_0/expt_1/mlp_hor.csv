@@ -1,3 +1,4 @@
-method,cost-ge,valid-ge
-Wachter,\textbf{0.07} $\pm$ 0.05,\textbf{1.00} $\pm$ 0.00
-ReUP,0.08 $\pm$ 0.05,\textbf{1.00} $\pm$ 0.00
+method,cost-sy,valid-sy,cost-ge,valid-ge
+Wachter,0.66 $\pm$ 0.59,\textbf{1.00} $\pm$ 0.00,0.47 $\pm$ 0.29,\textbf{1.00} $\pm$ 0.00
+ReUP,0.60 $\pm$ 0.55,\textbf{1.00} $\pm$ 0.00,\textbf{0.47} $\pm$ 0.29,\textbf{1.00} $\pm$ 0.00
+GT,\textbf{0.60} $\pm$ 0.55,\textbf{1.00} $\pm$ 0.00,0.47 $\pm$ 0.29,\textbf{1.00} $\pm$ 0.00
