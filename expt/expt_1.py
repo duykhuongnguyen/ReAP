@@ -6,14 +6,18 @@ import joblib
 import torch
 import sklearn
 import copy
-
 from collections import defaultdict, namedtuple
 from joblib import parallel_backend
 from joblib.externals.loky import set_loky_pickler
+
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold 
 from sklearn.utils import check_random_state
 from sklearn.preprocessing import StandardScaler
+
+from castle.metrics import MetricsDAG
+from castle.datasets import IIDSimulation, DAG
+from castle.algorithms import PC
 
 import dice_ml
 
@@ -23,7 +27,7 @@ from utils.data_transformer import DataTransformer
 from utils.funcs import compute_max_distance, lp_dist
 
 from expt.common import synthetic_params, synthetic_params_mean_cov, clf_map, method_map
-from expt.common import _run_single_instance, _run_single_instance_plans, _run_single_instance_plans_graph, to_mean_std
+from expt.common import _run_single_instance, to_mean_std
 from expt.common import load_models, enrich_training_data
 from expt.common import method_name_map, dataset_name_map, metric_order, metric_order_graph
 from expt.expt_config import Expt1
@@ -56,24 +60,34 @@ def run(ec, wdir, dname, cname, mname,
 
     l1_cost = []
     valid = []
+    rank = []
     feasible = []
 
     y_pred = model.predict(X_test)
     uds_X, uds_y = X_test[y_pred == 0], y_test[y_pred == 0]
     uds_X, uds_y = uds_X[:ec.max_ins], uds_y[:ec.max_ins]
-    # A = np.random.rand(X_train.shape[1], X_train.shape[1])
-    # A = np.dot(A, A.T)
-    # w, v = np.linalg.eig(A)
-    # A /= (max(w))
+    
     all_A = np.zeros((ec.num_A, X_train.shape[1], X_train.shape[1]))
+    idx = 0
+    d = np.zeros(X_train.shape[1])
+    d[0] = 1.0
     for i in range(ec.num_A):
-        S = np.diag(np.random.rand(X_train.shape[1]))
-        q, _ = scipy.linalg.qr(np.random.rand(X_train.shape[1], X_train.shape[1]))
-        A = q.T @ S @ q
+        shape = X_train.shape[1]
+        np.random.shuffle(d)
+        # S = np.diag(d)
+        # q, _ = scipy.linalg.qr(np.random.rand(X_train.shape[1], X_train.shape[1]))
+        # A = q.T @ S @ q
+        A = np.random.rand(shape, shape)
+        A = A @ A.T
+        A = A / (max(np.linalg.eig(A)[0]))
+        # W_0 = DAG.erdos_renyi(n_nodes=shape, n_edges=shape, weight_range=(0.5, 2.0), seed=seed)
+        # D_0 = np.identity(W_0.shape[0])
+        # A = (np.identity(W_0.shape[0]) - W_0).T @ np.linalg.inv(D_0) @ (np.identity(W_0.shape[0]) - W_0)
+        # A = A / (max(np.linalg.eig(A)[0]))
         all_A[i] = A
 
     params = dict(train_data=X_train,
-                  labels=y_train,
+                  labels=model.predict(X_train),
                   dataframe=df,
                   numerical=numerical,
                   config=new_config,
@@ -84,8 +98,6 @@ def run(ec, wdir, dname, cname, mname,
                   A=A,
                   num_A=ec.num_A,
                   all_A=all_A,)
-                  # transformer=transformer,
-                  # graph_pre=ec.graph_pre)
 
     params['reup_params'] = ec.reup_params
     params['wachter_params'] = ec.wachter_params
@@ -102,6 +114,7 @@ def run(ec, wdir, dname, cname, mname,
     for ret in rets:
         l1_cost.append(ret.l1_cost)
         valid.append(ret.valid)
+        rank.append(ret.rank)
         feasible.append(ret.feasible)
 
     def to_numpy_array(lst):
@@ -110,10 +123,17 @@ def run(ec, wdir, dname, cname, mname,
 
     l1_cost = np.array(l1_cost)
     valid = np.array(valid)
+    rank = np.array(rank)
     feasible = np.array(feasible)
 
+    res = {}
+    res['ptv_name'] = "T"
+    res['ptv_list'] = np.array([i for i in range(params["reup_params"]["T"])])
+    res['rank'] = rank
+
     helpers.pdump((l1_cost, valid, feasible),
-                  f'{cname}_{dname}_{mname}.pickle', wdir)
+                  f'{cname}_{dname}_{mname}_expt1.pickle', wdir)
+    helpers.pdump(res, f'{cname}_{dname}_{mname}_expt2.pickle', wdir)
 
     logger.info("Done dataset: %s, classifier: %s, method: %s!",
                 dname, cname, mname)
@@ -131,7 +151,7 @@ def plot_1(ec, wdir, cname, datasets, methods):
         joint_feasible = None
         for mname in methods:
             _, _, feasible = helpers.pload(
-                f'{cname}_{dname}_{mname}.pickle', wdir)
+                f'{cname}_{dname}_{mname}_expt1.pickle', wdir)
             if joint_feasible is None:
                 joint_feasible = np.ones_like(feasible)
             if '_ar' in mname:
@@ -144,7 +164,7 @@ def plot_1(ec, wdir, cname, datasets, methods):
 
         for mname in methods:
             l1_cost, valid, feasible = helpers.pload(
-                f'{cname}_{dname}_{mname}.pickle', wdir)
+                f'{cname}_{dname}_{mname}_expt1.pickle', wdir)
             avg = {}
             avg['cost'] = l1_cost 
             avg['valid'] = valid 
@@ -197,7 +217,7 @@ def run_expt_1(ec, wdir, datasets, classifiers, methods,
 
             for dname in datasets:
                 for mname in cmethods:
-                    filepath = os.path.join(wdir, f"{cname}_{dname}_{mname}.pickle")
+                    filepath = os.path.join(wdir, f"{cname}_{dname}_{mname}_expt1.pickle")
                     if not os.path.exists(filepath) or rerun:
                         jobs_args.append((ec.e1, wdir, dname, cname, mname,
                             num_proc, seed, logger))

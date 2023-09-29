@@ -8,15 +8,19 @@ import torch
 import sklearn
 import itertools
 import matplotlib.pyplot as plt
-
 from matplotlib.ticker import FormatStrFormatter
 from collections import defaultdict, namedtuple
 from joblib import parallel_backend
 from joblib.externals.loky import set_loky_pickler
+
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold 
 from sklearn.utils import check_random_state
 from sklearn.preprocessing import StandardScaler
+
+from castle.metrics import MetricsDAG
+from castle.datasets import IIDSimulation, DAG
+from castle.algorithms import PC, Notears
 
 import dice_ml
 
@@ -27,7 +31,7 @@ from utils.funcs import compute_max_distance, lp_dist, find_pareto
 
 from expt.common import synthetic_params, clf_map, method_map, method_name_map
 from expt.common import dataset_name_map 
-from expt.common import _run_single_instance, _run_single_instance_plans, to_numpy_array
+from expt.common import _run_single_instance, to_numpy_array
 from expt.common import load_models, enrich_training_data
 from expt.expt_config import Expt2
 
@@ -36,6 +40,7 @@ Results = namedtuple("Results", ["l1_cost", "cur_vald", "fut_vald", "feasible"])
 
 param_to_vary = {
     "reup": "T",
+    # "reup": "eps",
 }
 
 
@@ -78,12 +83,16 @@ def run(ec, wdir, dname, cname, mname,
     res['ptv_list'] = ptv_list
     res['cost'] = []
     res['feasible'] = []
-
+    
     all_A = np.zeros((ec.num_A, X_train.shape[1], X_train.shape[1]))
     for i in range(ec.num_A):
-        S = np.diag(np.random.rand(X_train.shape[1]))
-        q, _ = scipy.linalg.qr(np.random.rand(X_train.shape[1], X_train.shape[1]))
-        A = q.T @ S @ q
+        #S = np.diag(np.random.rand(X_train.shape[1]))
+        #q, _ = scipy.linalg.qr(np.random.rand(X_train.shape[1], X_train.shape[1]))
+        #A = q.T @ S @ q
+        W_0 = DAG.erdos_renyi(n_nodes=X_train.shape[1], n_edges=X_train.shape[1], weight_range=(0.5, 2.0), seed=seed)
+        D_0 = np.identity(W_0.shape[0])
+        A = (np.identity(W_0.shape[0]) - W_0).T @ np.linalg.inv(D_0) @ (np.identity(W_0.shape[0]) - W_0)
+        A = A / (max(np.linalg.eig(A)[0]))
         all_A[i] = A
 
     for value in ptv_list:
@@ -117,6 +126,8 @@ def run(ec, wdir, dname, cname, mname,
 
         if ptv == 'T':
             params['reup_params']['T'] = value
+        elif ptv == 'eps':
+            params['reup_params']['eps'] = value
         elif ptv == 'lmbda':
             params['reup_params']['lmbda'] = value
             params['wachter_params']['lmbda'] = value
@@ -137,14 +148,14 @@ def run(ec, wdir, dname, cname, mname,
         res['feasible'].append(np.array(feasible))
 
     helpers.pdump(res,
-                  f'{cname}_{dname}_{mname}.pickle', wdir)
+                  f'{cname}_{dname}_{mname}_expt2.pickle', wdir)
 
     logger.info("Done dataset: %s, classifier: %s, method: %s!",
                 dname, cname, mname)
 
 
 label_map = {
-    'cost': 'Cost',
+    'rank': 'Mean rank',
     'ptv_list': 'T',
 }
 
@@ -156,14 +167,13 @@ def plot_2(ec, wdir, cname, dname, methods):
         iter_marker = itertools.cycle(marker)
 
         for mname in methods:
-            # X, y = find_pareto(data[mname][x_label], data[mname][y_label])
             X, y = data[mname][x_label], data[mname][y_label]
+            X = [i for i in range(11)]
             ax.plot(X, y, marker=next(iter_marker),
                     label=method_name_map[mname], alpha=0.8)
 
         ax.set_ylabel(label_map[y_label])
         ax.set_xlabel(label_map[x_label])
-        ax.set_yscale('log')
         ax.legend(prop={'size': 14})
         filepath = os.path.join(wdir, f"{cname}_{dname}_{x_label}_{y_label}.png")
         plt.savefig(filepath, dpi=400, bbox_inches='tight')
@@ -172,30 +182,28 @@ def plot_2(ec, wdir, cname, dname, methods):
     joint_feasible = None
     for mname in methods:
         res = helpers.pload(
-            f'{cname}_{dname}_{mname}.pickle', wdir)
-        for feasible in res['feasible']:
-            if joint_feasible is None:
-                joint_feasible = feasible
-            # joint_feasible = np.logical_and(joint_feasible, feasible)
+            f'{cname}_{dname}_{mname}_expt2.pickle', wdir)
 
     for mname in methods:
         res = helpers.pload(
-            f'{cname}_{dname}_{mname}.pickle', wdir)
+            f'{cname}_{dname}_{mname}_expt2.pickle', wdir)
 
         data[dname][mname] = {}
         data[mname]['ptv_name'] = res['ptv_name']
         data[mname]['ptv_list'] = res['ptv_list']
-        data[mname]['cost'] = []
-
+        data[mname]['rank'] = []
+        
         for i in range(len(res['ptv_list'])):
-            data[mname]['cost'].append(np.mean(res['cost'][i]))
+            data[mname]['rank'].append(np.mean(res['rank'][i]))
+        data[mname]['ptv_list'] = res['ptv_list']
+        data[mname]['rank'] = np.mean(res['rank'], axis=0)
 
-    plot(methods, 'ptv_list', 'cost', data)
+    plot(methods, 'ptv_list', 'rank', data)
 
 
 def plot_2_1(ec, wdir, cname, datasets, methods):
     def __plot(ax, data, dname, x_label, y_label):
-        marker = reversed(['+', 'v', '^', 'o', (5, 0)])
+        marker = reversed(['o', '+', 'v', '^', 'o', (5, 0), 'o'])
         iter_marker = itertools.cycle(marker)
 
         for mname, o in data[dname].items():
@@ -203,8 +211,9 @@ def plot_2_1(ec, wdir, cname, datasets, methods):
                 ax.scatter(data[dname][mname][x_label], data[dname][mname][y_label],
                            marker=(5, 1), label=method_name_map[mname], alpha=0.7, color='black', zorder=10)
             else:
-                X, y = find_pareto(data[dname][mname][x_label], data[dname][mname][y_label])
-                # X, y = data[dname][mname][x_label], data[dname][mname][y_label]
+                # X, y = find_pareto(data[dname][mname][x_label], data[dname][mname][y_label])
+                X, y = data[dname][mname][x_label], data[dname][mname][y_label]
+                X = [i for i in range(11)]
                 ax.plot(X, y, marker=next(iter_marker),
                         label=method_name_map[mname], alpha=0.7, linewidth=2, markersize=12)
         ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
@@ -215,49 +224,63 @@ def plot_2_1(ec, wdir, cname, datasets, methods):
         joint_feasible = None
         for mname in methods:
             res = helpers.pload(
-                f'{cname}_{dname}_{mname}.pickle', wdir)
-            for feasible in res['feasible']:
-                if joint_feasible is None:
-                    joint_feasible = feasible
+                f'{cname}_{dname}_{mname}_expt2.pickle', wdir)
+            # for feasible in res['feasible']:
+            #     if joint_feasible is None:
+            #         joint_feasible = feasible
                 # joint_feasible = np.logical_and(joint_feasible, feasible)
 
         for mname in methods:
             res = helpers.pload(
-                f'{cname}_{dname}_{mname}.pickle', wdir)
+                f'{cname}_{dname}_{mname}_expt2.pickle', wdir)
 
             # print(res)
             data[dname][mname] = {}
             data[dname][mname]['ptv_name'] = res['ptv_name']
             data[dname][mname]['ptv_list'] = res['ptv_list']
             data[dname][mname]['cost'] = []
-            data[dname][mname]['diversity'] = []
-            data[dname][mname]['dpp'] = []
-            data[dname][mname]['manifold_dist'] = []
+            data[dname][mname]['rank'] = []
 
             for i in range(len(res['ptv_list'])):
                 data[dname][mname]['cost'].append(np.mean(res['cost'][i]))
                 data[dname][mname]['diversity'].append(np.mean(res['diversity'][i]))
                 data[dname][mname]['dpp'].append(np.mean(res['dpp'][i]))
                 data[dname][mname]['manifold_dist'].append(np.mean(res['manifold_dist'][i]))
+                data[dname][mname]['rank'].append(np.mean(res['rank'][i]))
+            data[dname][mname]['rank'] = np.mean(res['rank'], axis=0)
 
     plt.style.use('seaborn-deep')
     plt.rcParams.update({'font.size': 24})
     num_ds = len(datasets)
-    metrics = ['diversity', 'dpp']
-    figsize_map = {5: (30, 5.5), 4: (30, 12), 3: (20, 5.5), 2: (10, 5.5), 1: (6, 5)}
+    metrics = ['rank']
+    figsize_map = {5: (30, 5.5), 4: (30, 7.5), 3: (20, 5.5), 2: (20, 8), 1: (30, 5.5)}
     fig, axs = plt.subplots(len(metrics), num_ds, figsize=figsize_map[num_ds])
     if num_ds == 1:
         axs = axs.reshape(-1, 1)
 
     for i in range(num_ds):
         for j in range(len(metrics)):
-            __plot(axs[j, i], data, datasets[i], 'cost', metrics[j])
+            if len(metrics) == 1:
+                __plot(axs[i], data, datasets[i], 'ptv_list', metrics[j])
+            else:
+                __plot(axs[j, i], data, datasets[i], 'cost', metrics[j])
+            
             if i == 0:
-                axs[j, i].set_ylabel(label_map[metrics[j]])
+                if len(metrics) == 1:
+                    axs[i].set_ylabel(label_map[metrics[j]])
+                else:
+                    axs[j, i].set_ylabel(label_map[metrics[j]])
             if j == len(metrics) - 1:
-                axs[j, i].set_xlabel(label_map['cost'])
+                if len(metrics) == 1:
+                    axs[i].set_xlabel(label_map['ptv_list'])
+                else:
+                    axs[j, i].set_xlabel(label_map['cost'])
 
     marker = reversed(['+', 'v', '^', 'o', (5, 0)])
+    # for i in range(num_ds):
+    #     axs[i].legend(loc='upper right', frameon=False)
+    # fig.legend(["ReAP-K", "ReAP-2"], loc='lower center', ncol=2, bbox_to_anchor=(0.5, -0.03), frameon=False)
+    fig.legend(["ReAP"], loc='lower center', ncol=1, frameon=False)
     iter_marker = itertools.cycle(marker)
     ax = fig.add_subplot(111, frameon=False)
     plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
@@ -267,8 +290,10 @@ def plot_2_1(ec, wdir, cname, datasets, methods):
         else:
             ax.plot([] , marker=next(iter_marker), label=method_name_map[mname], alpha=0.7)
 
-    ax.legend(loc='lower center', bbox_to_anchor=(0.5, -.23 - .1 * (len(methods) > 5)),
-              ncol=min(len(methods), 5), frameon=False)
+    ax.legend(loc='lower center', bbox_to_anchor=(0.5, -0.23 - .1 * (len(methods) > 5)), ncol=min(len(methods), 5), frameon=False)
+    ax.legend(loc='lower center', ncol=min(len(methods), 5), bbox_to_anchor=(0.5, -0.63), frameon=False)
+    for i in range(num_ds):
+        axs[i].legend(loc='best', frameon=False)
     plt.tight_layout()
     joint_dname = ''.join([e[:2] for e in datasets])
     filepath = os.path.join(wdir, f"{cname}_{joint_dname}.pdf")
@@ -300,7 +325,7 @@ def run_expt_2(ec, wdir, datasets, classifiers, methods,
 
             for dname in datasets:
                 for mname in cmethods:
-                    filepath = os.path.join(wdir, f"{cname}_{dname}_{mname}.pickle")
+                    filepath = os.path.join(wdir, f"{cname}_{dname}_{mname}_expt2.pickle")
                     if not os.path.exists(filepath) or rerun:
                         jobs_args.append((ec.e2, wdir, dname, cname, mname,
                             num_proc, seed, logger, start_index, num_ins))
@@ -314,6 +339,6 @@ def run_expt_2(ec, wdir, datasets, classifiers, methods,
             cmethods.remove('wachter')            
         for dname in datasets:
             plot_2(ec.e2, wdir, cname, dname, cmethods)
-        # plot_2_1(ec.e2, wdir, cname, datasets, cmethods)
+        plot_2_1(ec.e2, wdir, cname, datasets, cmethods)
 
     logger.info("Done ept 2.")

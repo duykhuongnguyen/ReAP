@@ -9,6 +9,7 @@ from functools import partialmethod
 from sklearn.model_selection import train_test_split
 from sklearn.utils import check_random_state
 from collections import defaultdict, namedtuple
+from time import time
 
 import dice_ml
 
@@ -20,12 +21,11 @@ from classifiers import mlp, random_forest
 
 from methods.face import face
 from methods.dice import dice
-from methods.gs import gs
-from methods.reup import reup
+from methods.reup import reup, reup_graph, reup_graph_iden, reup_graph_gt
 from methods.wachter import wachter, wachter_gt
 
 
-Results = namedtuple("Results", ["l1_cost", "valid", "feasible"])
+Results = namedtuple("Results", ["l1_cost", "valid", "rank", "feasible"])
 Results_graph = namedtuple("Results_graph", ["valid", "l1_cost", "diversity", "dpp", "manifold_dist", "hamming",  "lev", "jac", "feasible"])
 
 
@@ -57,11 +57,6 @@ def enrich_training_data(num_samples, train_data, cat_indices, rng):
     max_f_val = np.max(train_data, axis=0)
     new_data = rng.uniform(min_f_val, max_f_val, (num_samples - cur_n, d))
 
-    # new_data = rng.normal(0, 1, (num_samples - cur_n, d))
-    # scaler = StandardScaler()
-    # scaler.fit(train_data)
-    # new_data = new_data * scaler.scale_ + scaler.mean_
-
     new_data[:, cat_indices] = new_data[:, cat_indices] >= 0.5
 
     new_data = np.vstack([train_data, new_data])
@@ -80,78 +75,40 @@ def _run_single_instance(idx, method, x0, model, seed, logger, params=dict()):
     np.random.seed(seed+1)
     random_state = check_random_state(seed)
 
+    rank_l = []
     l1_cost = np.zeros(params['num_A'])
+    t0 = time()
+    if method == dice or method==wachter:
+        x_ar, feasible = method.generate_recourse(x0, model, random_state, params)
+
     for i in range(params['num_A']):
         params['A'] = params['all_A'][i]
 
-        x_ar, feasible = method.generate_recourse(x0, model, random_state, params)
-        l1_cost[i] = mahalanobis_dist(x_ar, x0, params['A'])
+        if method == reup:
+            x_ar, rank, feasible = method.generate_recourse(x0, model, random_state, params)
+            rank_l.append(rank)
+        elif method == reup_graph:
+            x_ar, cost, rank, feasible = method.generate_recourse(x0, model, random_state, params)
+            l1_cost[i] = cost
+        elif method == reup_graph_iden or method == reup_graph_gt:
+            x_ar, cost, feasible = method.generate_recourse(x0, model, random_state, params)
+            l1_cost[i] = cost
+        elif method != dice and method != wachter:
+            x_ar, feasible = method.generate_recourse(x0, model, random_state, params)
+        if method != reup_graph and method != reup_graph_iden:
+            l1_cost[i] = mahalanobis_dist(x_ar, x0, params['A'])
+    
+    if params['reup_params']['rank']:
+        rank_l = np.array(rank_l)
     l1_cost = np.sum(l1_cost)
-    valid = 1.0 if feasible else 0.0
+    rank = np.mean(rank_l, axis=0)
 
-    return Results(l1_cost, valid, feasible)
+    # device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    # model = model.to("cpu")
+    # x_ar = torch.from_numpy(x_ar).to("cpu")
+    valid = 1.0 if model.predict(x_ar) else 0.0
 
-
-def _run_single_instance_plans(idx, method, x0, model, seed, logger, params=dict()):
-    # logger.info("Generating recourse for instance : %d", idx)
-    torch.manual_seed(seed+2)
-    np.random.seed(seed+1)
-    random_state = check_random_state(seed)
-
-    df = params['dataframe']
-    numerical = params['numerical']
-    k = params['k']
-    transformer = params['transformer']
-
-    full_dice_data = dice_ml.Data(dataframe=df,
-                              continuous_features=numerical,
-                              outcome_name='label')
-    plans, report = method.generate_recourse(x0, model, random_state, params)
-    # print(idx, transformer.inverse_transform(x0.reshape(1, -1)))
-    # print(transformer.inverse_transform(plans.reshape(3, -1)))
-
-    valid = compute_validity(model, plans)
-    l1_cost = compute_proximity(x0, plans, p=2)
-    # diversity = compute_diversity(plans, transformer.data_interface)
-    diversity = compute_pairwise_cosine(x0, plans, params['k'])
-    manifold_dist = compute_distance_manifold(plans, params['train_data'], params['k'])
-    dpp = compute_dpp(plans)
-    # likelihood = compute_likelihood(plans, params['train_data'], params['k'])
-    likelihood = compute_kde(plans, params['train_data'][params['labels'] == 1])
-
-    return Results(valid, l1_cost, diversity, dpp, manifold_dist, likelihood, report['feasible'])
-
-
-def _run_single_instance_plans_graph(idx, method, x0, graph, model, seed, logger, params=dict()):
-    # logger.info("Generating recourse for instance : %d", idx)
-    torch.manual_seed(seed+2)
-    np.random.seed(seed+1)
-    random_state = check_random_state(seed)
-
-    df = params['dataframe']
-    numerical = params['numerical']
-    k = params['k']
-    transformer = params['transformer']
-
-    full_dice_data = dice_ml.Data(dataframe=df,
-                              continuous_features=numerical,
-                              outcome_name='label')
-    params["graph"] = graph
-    # print(graph["data"][0], x0)
-    plans, dist, paths, report = method.generate_recourse(x0, model, random_state, params)
-
-    valid = compute_validity(model, plans)
-    # l1_cost = compute_proximity(x0, plans, p=2)
-    l1_cost = np.mean(dist)
-    diversity = compute_pairwise_cosine(x0, plans, params['k'])
-    manifold_dist = compute_distance_manifold(plans, params['train_data'], params['k'])
-    dpp = compute_dpp(plans)
-    # likelihood = compute_kde(plans, params['train_data'][params['labels'] == 1])
-    hamming = compute_diversity_path(hamming_distance, paths)
-    lev = compute_diversity_path(levenshtein_distance, paths)
-    jac = compute_diversity_path(jaccard, paths, weighted_matrix=graph['weighted_adj'])
-
-    return Results_graph(valid, l1_cost, diversity, dpp, manifold_dist, hamming, lev, jac, report['feasible'])
+    return Results(l1_cost, valid, rank, feasible)
 
 
 method_name_map = {
@@ -159,7 +116,11 @@ method_name_map = {
     'dice': 'DiCE',
     'dice_ga': 'DICE_GA',
     'gs': "GS",
-    'reup': "ReUP",
+    'reup': "ReAP-K",
+    'pair': "ReAP-2",
+    'reup_graph': "ReUP",
+    'reup_graph_iden': "ReUP($T=0$)",
+    'reup_graph_gt': "ReUP($T$)",
     'wachter': "Wachter",
     'gt': "GT",
 }
@@ -175,7 +136,6 @@ dataset_name_map = {
     "compas": "Compas",
 }
 
-# metric_order = {'cost': -1, 'valid': 1, 'diversity': -1, 'dpp': 1, 'manifold_dist': -1, 'likelihood': 1}
 metric_order = {'cost': -1, 'valid': 1}
 
 metric_order_graph = {'cost': -1, 'valid': 1, 'diversity': -1, 'dpp': 1, 'hamming': 1, 'lev': 1, 'jac': -1}
@@ -183,9 +143,10 @@ metric_order_graph = {'cost': -1, 'valid': 1, 'diversity': -1, 'dpp': 1, 'hammin
 method_map = {
     "face": face,
     "dice": dice,
-    # "dice_ga": dice_ga,
-    "gs": gs,
     "reup": reup,
+    "reup_graph": reup_graph,
+    "reup_graph_iden": reup_graph_iden,
+    "reup_graph_gt": reup_graph_gt,
     "wachter": wachter,
     "gt": wachter_gt,
 }

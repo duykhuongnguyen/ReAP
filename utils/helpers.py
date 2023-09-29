@@ -146,8 +146,10 @@ def get_dataset(dataset='synthesis', params=list()):
         numerical = list(dataset.columns)
         numerical.remove('label')
     elif 'adult' in dataset:
-        dataset, numerical = load_adult_income_dataset('./data/adult.csv')
+        # dataset, numerical = load_adult_income_dataset('./data/adult.csv')
         # print(numerical)
+        joint_dataset = pd.read_csv('./data/adult.csv')
+        numerical = ['age', 'fnlwgt', 'education-num', 'capital-gain', 'hours-per-week', 'capital-loss']
     elif 'german' in dataset:
         dataset = pd.read_csv('./data/corrected_german_small.csv'
                               if 'shift' in dataset else './data/german_small.csv')
@@ -172,6 +174,12 @@ def get_dataset(dataset='synthesis', params=list()):
     elif 'compas' in dataset:
         dataset = pd.read_csv('./data/compas.csv')
         numerical = ['age', 'two_year_recid', 'priors_count', 'length_of_stay']
+    elif 'gmc' in dataset:
+        dataset = pd.read_csv('.data/gmc.csv')
+        numerical = ['RevolvingUtilizationOfUnsecuredLines', 'age', 'NumberOfTime30-59DaysPastDueNotWorse', 'DebtRatio', 'MonthlyIncome', 'NumberOfOpenCreditLinesAndLoans', 'NumberOfTimes90DaysLate', 'NumberRealEstateLoansOrLines', 'NumberOfTime60-89DaysPastDueNotWorse', 'NumberOfDependents']
+    elif 'heloc' in dataset:
+        dataset = pd.read_csv('./data/heloc.csv')
+        numerical = ['ExternalRiskEstimate', 'MSinceOldestTradeOpen', 'MSinceMostRecentTradeOpen', 'AverageMInFile', 'NumSatisfactoryTrades', 'NumTrades60Ever2DerogPubRec', 'NumTrades90Ever2DerogPubRec', 'PercentTradesNeverDelq', 'MSinceMostRecentDelq', 'NumTotalTrades', 'NumTradesOpeninLast12M', 'PercentInstallTrades', 'MSinceMostRecentInqexcl7days', 'NumInqLast6M', 'NumInqLast6Mexcl7days', 'NetFractionRevolvingBurden', 'NetFractionInstallBurden', 'NumRevolvingTradesWBalance', 'NumInstallTradesWBalance', 'NumBank2NatlTradesWHighUtilization', 'PercentTradesWBalance']
     else:
         raise ValueError("Unknown dataset")
 
@@ -184,7 +192,9 @@ def get_full_dataset(dataset='synthesis', params=list()):
         numerical = list(joint_dataset.columns)
         numerical.remove('label')
     elif 'adult' in dataset:
-        joint_dataset, numerical = load_adult_income_dataset('./data/adult.csv')
+        # joint_dataset, numerical = load_adult_income_dataset('./data/adult.csv')
+        joint_dataset = pd.read_csv('./data/adult.csv')
+        numerical = ['age', 'fnlwgt', 'education-num', 'capital-gain', 'hours-per-week', 'capital-loss']
     elif 'compas' in dataset:
         joint_dataset = pd.read_csv('./data/compas.csv')
         numerical = ['age', 'two_year_recid', 'priors_count', 'length_of_stay']
@@ -213,6 +223,12 @@ def get_full_dataset(dataset='synthesis', params=list()):
         shift_dataset = pd.read_csv('./data/bank_shift.csv')
         joint_dataset = dataset.append(shift_dataset)
         numerical = ['age', 'balance', 'campaign', 'previous']
+    elif 'gmc' in dataset:
+        joint_dataset = pd.read_csv('./data/gmc.csv')
+        numerical = ['RevolvingUtilizationOfUnsecuredLines', 'age', 'NumberOfTime30-59DaysPastDueNotWorse', 'DebtRatio', 'MonthlyIncome', 'NumberOfOpenCreditLinesAndLoans', 'NumberOfTimes90DaysLate', 'NumberRealEstateLoansOrLines', 'NumberOfTime60-89DaysPastDueNotWorse', 'NumberOfDependents']
+    elif 'heloc' in dataset:
+        joint_dataset = pd.read_csv('./data/heloc.csv')
+        numerical = ['ExternalRiskEstimate', 'MSinceOldestTradeOpen', 'MSinceMostRecentTradeOpen', 'AverageMInFile', 'NumSatisfactoryTrades', 'NumTrades60Ever2DerogPubRec', 'NumTrades90Ever2DerogPubRec', 'PercentTradesNeverDelq', 'MSinceMostRecentDelq', 'NumTotalTrades', 'NumTradesOpeninLast12M', 'PercentInstallTrades', 'MSinceMostRecentInqexcl7days', 'NumInqLast6M', 'NumInqLast6Mexcl7days', 'NetFractionRevolvingBurden', 'NetFractionInstallBurden', 'NumRevolvingTradesWBalance', 'NumInstallTradesWBalance','NumBank2NatlTradesWHighUtilization', 'PercentTradesWBalance']
     else:
         raise ValueError("Unknown dataset")
 

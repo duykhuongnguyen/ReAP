@@ -1,4 +1,4 @@
-# recourse-user-preference (ReUP)
+# recourse-adaptive-preference (ReAP)
 
 ## Usage
 
@@ -9,3 +9,16 @@ python train_model.py --clf mlp --data synthesis german sba bank adult --num-pro
 ```
 
 2. Run experiments
+
+Gradient-based recourse (The saved files for experiment 1 could be used in experiment 2)
+
+```sh                                             
+python run_expt.py -e 1 --datasets synthesis german bank student -clf mlp --methods dice wachter reup -uc
+
+python run_expt.py -e 2 --datasets synthesis german bank student -clf mlp --methods reup -uc
+```
+Graph-based recourse:
+
+```sh                                             
+python run_expt.py -e 1 --datasets synthesis german bank student -clf mlp --method reup_graph -uc 
+```

@@ -64,7 +64,8 @@ def gd(
     -------
     Counterfactual example as np.ndarray
     """
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    #device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cpu"
     torch.manual_seed(0)
 
     torch_model.to(device)
@@ -81,8 +82,8 @@ def gd(
     optimizer = optim.Adam([x_new], lr, amsgrad=True)
 
     if loss_type == "MSE":
-        if len(y_target) != 1:
-            raise ValueError(f"y_target {y_target} is not a single logit score")
+        # if len(y_target) != 1:
+        #     raise ValueError(f"y_target {y_target} is not a single logit score")
 
         # If logit is above 0.0 we want class 1, else class 0
         target_class = int(y_target[0] > 0.0)

@@ -8,7 +8,7 @@ from methods.dice.dice_wrapper import DicePyTorchWrapper
 def generate_recourse(x0, model, random_state, params=dict()):
     df = params['dataframe']
     numerical = params['numerical']
-    k = params['k']
+    k = params["dice_params"]['k']
 
     full_dice_data = dice_ml.Data(dataframe=df,
                                   continuous_features=numerical,
@@ -32,5 +32,5 @@ def generate_recourse(x0, model, random_state, params=dict()):
     
     report = dict(feasible=True)
     # print(plans.final_cfs_df_sparse)
-    return plans.cf_examples_list[0].final_cfs_df_sparse, report
+    return plans.final_cfs_df_sparse[0], True
     # return plans.final_cfs_df.drop(columns=['label']).to_numpy(), report

@@ -117,14 +117,16 @@ def gd(
 
             if loss_type == "MSE":
                 # single logit score for the target class for MSE loss
-                f_x = torch.log(f_x_new / (1 - f_x_new))
+                f_x = torch_model(x_new_enc)
+                f_x = torch.log(f_x / (1 - f_x))
             elif loss_type == "BCE":
                 # tuple output for BCE loss
                 f_x = torch_model(x_new_enc).squeeze()
             else:
                 raise ValueError(f"loss_type {loss_type} not supported")
 
-            cost = torch.matmul(x_new_enc - x, (x_new_enc - x).T)
+            cost = torch.dist(x_new_enc, x)
+            # cost = torch.matmul(x_new_enc - x, (x_new_enc - x).T)
             f_loss = loss_fn(f_x, y_target)
             loss = f_loss + lamb * cost
             loss.backward()

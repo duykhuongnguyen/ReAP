@@ -44,7 +44,7 @@ def l1_dist(x, y, p=2):
 
 
 def mahalanobis_dist(x, y, A):
-    return np.sqrt((x - y).T @ A @ (x - y))
+    return (x - y).T @ A @ (x - y)
 
 
 def uniform_ball(x, r, n, random_state=None):
@@ -70,10 +70,8 @@ def compute_robustness(exps):
     ret = 0
 
     for w, b in exps[1:]:
-        # e = np.hstack([w, b])
         w, _ = normalize_exp(w, b)
         ret = max(ret, np.linalg.norm(w0 - w, 2))
-        # ret = max(ret, sp.spatial.distance.cosine(e, e0))
 
     return ret
 
@@ -189,6 +187,7 @@ def shortest_path(graph, index):
     distances[index] = np.inf  # avoid min. distance to be x^F itself
     min_distance = distances.min()
     return distances, min_distance
+
 
 
 def compute_proximity(test_ins, plans, p=2):
@@ -355,3 +354,13 @@ def jaccard(p1, p2, weighted_matrix):
         s2 += weighted_matrix[edge]
 
     return s1 / s2
+
+
+def mahalanobis_dist_graph(A, data, path):
+     l = len(path)
+     res = 0
+     for i in range(l - 1):
+         cost = (data[path[i + 1]] - data[path[i]]).T @ A @ (data[path[i + 1]] - data[path[i]])
+         res += cost
+     
+     return res

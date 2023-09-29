@@ -131,5 +131,10 @@ dmypy.json
 utils/*.swp
 methods/*.swp
 expt/*.swp
+expt/__pycache__/
 classifiers/*.swp
+classifiers/__pycache__/
+utils/__pycache__/
 *.swp
+results/
+.DS_Store

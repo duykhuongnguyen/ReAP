@@ -32,7 +32,6 @@ scipy
 scs
 setuptools-scm
 six
-sklearn
 tdqm
 threadpoolctl
 tifffile
