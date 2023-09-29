@@ -1,4 +1,6 @@
-# recourse-adaptive-preference (ReAP)
+# ReAP
+
+Code for submission: "Cost Adaptive Recourse Recommendation by Adaptive Preference Elicitation" (ReAP)
 
 ## Usage
 
